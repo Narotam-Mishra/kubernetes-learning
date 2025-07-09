@@ -492,4 +492,3 @@ Kubernetes (K8s) provides powerful capabilities that solve many real-world chall
 - `kubectl config use-context docker-desktop`    # For Docker Desktop cluster
 - `kubectl config use-context minikube`          # For Minikube cluster
 
-## start from (14:24 - 15:54)
