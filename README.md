@@ -468,4 +468,28 @@ Kubernetes (K8s) provides powerful capabilities that solve many real-world chall
 
 ---
 
+### Useful commands for Kubernetes 
+
+**Command to start your cluster** - `minikube start`
+
+**Clean up any existing minikube installation** - `minikube delete`
+
+**Set Docker as the default driver** - `minikube config set driver docker`
+
+**Start minikube with Docker driver** - `minikube start --driver=docker`
+
+**Verify installation**
+`minikube status`
+`kubectl get nodes`
+
+**Start minikube dashboard** - `minikube dashboard`
+
+**Check which cluster kubectl is currently using** - `kubectl config current-context`
+
+**List all available contexts** - `kubectl config get-contexts`
+
+**Switch between clusters as needed**
+- `kubectl config use-context docker-desktop`    # For Docker Desktop cluster
+- `kubectl config use-context minikube`          # For Minikube cluster
+
 ## start from (14:24 - 15:54)
