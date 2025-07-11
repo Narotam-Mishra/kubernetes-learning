@@ -619,4 +619,200 @@ minikube service my-nginx
 
 ---
 
-## start from (45:51)
+* App editing
+* Dockerfile creation
+* Docker image creation & push
+* Kubernetes deployment
+* Viewing logs & details
+* Exposing app via service
+
+---
+
+## 🔧 1. **Edit and Test the App**
+
+* Modify your app file (e.g., change text like `This is a demo project for Docker`).
+* Save the file and **restart** using `npm start`.
+* This confirms your app works **before containerizing**.
+
+---
+
+## 🐳 2. **Create a Dockerfile**
+
+Inside your app folder (`test-app`), create a file named `Dockerfile`:
+
+```Dockerfile
+FROM node:20
+WORKDIR /app
+COPY . .
+RUN npm install
+CMD ["npm", "start"]
+```
+
+### Key Dockerfile Instructions:
+
+* `FROM node:20`: Use official Node.js image.
+* `WORKDIR /app`: Set working directory inside container.
+* `COPY . .`: Copy everything to container.
+* `RUN npm install`: Install dependencies.
+* `CMD`: Start the app.
+
+---
+
+## 🏗️ 3. **Build Docker Image Locally**
+
+Command:
+
+```bash
+docker build -t yourdockerhubusername/webapp-demo:02 .
+```
+
+### Notes:
+
+* Use the proper **Docker Hub repo name**.
+* `:02` is the version tag.
+* The `.` means build from current directory (where Dockerfile is).
+
+Verify image with:
+
+```bash
+docker images
+```
+
+---
+
+## ☁️ 4. **Push Image to Docker Hub**
+
+Steps:
+
+1. Login to Docker:
+
+   ```bash
+   docker login
+   ```
+2. Push the image:
+
+   ```bash
+   docker push yourdockerhubusername/webapp-demo:02
+   ```
+
+Check the pushed image on Docker Hub to confirm.
+
+---
+
+## ☸️ 5. **Start Minikube and Create Deployment**
+
+Start your local Kubernetes cluster (Minikube):
+
+```bash
+minikube start
+```
+
+Check cluster status:
+
+```bash
+minikube status
+```
+
+Create a Kubernetes deployment using the image you pushed:
+
+```bash
+kubectl create deployment my-web-app --image=yourdockerhubusername/webapp-demo:02
+```
+
+Verify deployment:
+
+```bash
+kubectl get deployments
+kubectl get pods
+```
+
+---
+
+## 🧹 6. **Optional: Clean Up Old Deployments**
+
+To delete an existing deployment:
+
+```bash
+kubectl delete deployment my-nginx
+```
+
+---
+
+## 📊 7. **Use Minikube Dashboard (UI Monitoring)**
+
+To open the visual dashboard:
+
+```bash
+minikube dashboard
+```
+
+You can check:
+
+* Pod status
+* Image used
+* Logs
+* Events
+* Health
+
+---
+
+## 📄 8. **Check Logs & Pod Details via Terminal**
+
+To get logs:
+
+```bash
+kubectl logs <pod-name>
+```
+
+To describe a pod (get full details like IP, image, status):
+
+```bash
+kubectl describe pod <pod-name>
+```
+
+---
+
+## 🌐 9. **Expose the App Using a Kubernetes Service**
+
+Since the app runs inside a **Pod** (isolated), you can’t access it directly.
+To access it via browser, expose it using a **LoadBalancer** service:
+
+```bash
+kubectl expose deployment my-web-app --type=LoadBalancer --port=3000
+```
+
+Check services:
+
+```bash
+kubectl get services
+```
+
+Use Minikube to open the exposed app in the browser:
+
+```bash
+minikube service my-web-app
+```
+
+This opens a working URL that runs your app.
+
+---
+
+## ✅ Final Recap of All Important Commands
+
+| Task                      | Command                                                              |
+| ------------------------- | -------------------------------------------------------------------- |
+| Build Docker image        | `docker build -t <name>:<tag> .`                                     |
+| Push image to Docker Hub  | `docker push <name>:<tag>`                                           |
+| Start Minikube            | `minikube start`                                                     |
+| Create deployment         | `kubectl create deployment <name> --image=<image>`                   |
+| View deployments/pods     | `kubectl get deployments` / `kubectl get pods`                       |
+| View logs                 | `kubectl logs <pod-name>`                                            |
+| Describe a pod            | `kubectl describe pod <pod-name>`                                    |
+| Expose service            | `kubectl expose deployment <name> --type=LoadBalancer --port=<port>` |
+| Access service in browser | `minikube service <service-name>`                                    |
+| Open Kubernetes dashboard | `minikube dashboard`                                                 |
+| Delete a deployment       | `kubectl delete deployment <name>`                                   |
+
+---
+
+## start from (54:51)
