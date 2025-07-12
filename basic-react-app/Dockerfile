@@ -6,4 +6,8 @@ COPY . .
 
 RUN npm install
 
-CMD ["npm", "run", "dev"]
+EXPOSE 5173
+
+ENV HOST=0.0.0.0
+
+CMD ["npm", "run", "dev", "--", "--host"]

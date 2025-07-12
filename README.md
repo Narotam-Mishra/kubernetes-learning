@@ -812,7 +812,260 @@ This opens a working URL that runs your app.
 | Access service in browser | `minikube service <service-name>`                                    |
 | Open Kubernetes dashboard | `minikube dashboard`                                                 |
 | Delete a deployment       | `kubectl delete deployment <name>`                                   |
+| Check services            | `kubectl get service`                                                |
+| expose app in the browser | `minikube service my-web-app`                                        |
+---
+
+### 🚀 Updating, Rolling Out & Rolling Back Apps in Kubernetes — Quick Guide
+
+| Step                                     | What Happens                                                                                                                              | Key `kubectl` / Docker Commands                                        | Why It Matters                                                      |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **1 Edit Code**                          | Change source (e.g., `app.js`).                                                                                                           | —                                                                      | Prep new app version.                                               |
+| **2 Build New Image**                    | Use updated source to create container image.                                                                                             | `docker build -t <user>/<repo>:v5 .`                                   | Packages new code.                                                  |
+| **3 Push Image**                         | Upload image to a registry (Docker Hub, ECR, etc.).                                                                                       | `docker push <user>/<repo>:v5`                                         | Makes image pull‑able by the cluster.                               |
+| **4 Update Deployment (Rolling Update)** | Tell K8s to use the new image.                                                                                                            | `kubectl set image deployment/my-web-app webapp-demo=<user>/<repo>:v5` | Starts a **rolling update**.                                        |
+| **5 Zero‑Downtime Behavior**             | • K8s spins up **new pod(s)** with `v5`.<br>• **Old pod(s)** continue serving until new pod Ready.<br>• When Ready, old pod(s) terminate. | `kubectl get pods` to watch; Dashboard shows old → new.                | Users see **no outage**.                                            |
+| **6 Verify**                             | Confirm rollout finished.                                                                                                                 | `kubectl rollout status deployment/my-web-app`                         | Ensures update succeeded.                                           |
+| **7 Switch Versions on Demand**          | Point back to any tag (e.g., `:v1`).                                                                                                      | Repeat **Step 4** with different tag.                                  | Easy version hopping.                                               |
+| **8 Negative Test (Bad Image Tag)**      | Setting a non‑existent tag (e.g., `:v6`) causes **ImagePullBackOff**.                                                                     | `kubectl set image … :v6`<br>`kubectl get pods` → ImagePullBackOff     | New pod never becomes Ready; old pod keeps running (site stays up). |
+| **9 Check Rollout Health**               | See why rollout is stuck.                                                                                                                 | `kubectl rollout status deployment/my-web-app`                         | Shows waiting on image pull.                                        |
+| **10 Rollback**                          | Abort bad rollout and return to last good state.                                                                                          | `kubectl rollout undo deployment/my-web-app`                           | Restores service instantly.                                         |
 
 ---
 
-## start from (54:51)
+#### 🔑 Important Concepts & Behaviours
+
+* **Rolling Update (default strategy)**
+  K8s gradually replaces pods; ensures *at least one* healthy replica stays available → **zero downtime**.
+
+* **Readiness before Termination**
+  Old pod is killed **only after** the new pod reports Ready.
+
+* **Image Tags = Versions**
+  Tag every image (e.g., `:v1`, `:v5`) so you can switch or rollback quickly.
+
+* **Rollout Objects**
+  Deployment keeps a *revision history*; `kubectl rollout history deployment/<name>` shows all versions.
+
+* **Failure Handling**
+
+  * Bad image → `ImagePullBackOff`; rollout stalls.
+  * App crashloop → `CrashLoopBackOff`.
+    In both cases you can `rollout undo`.
+
+* **Dashboard & CLI parity**
+  Everything you see in **Minikube Dashboard** (events, logs, container image) is available via CLI (`logs`, `describe`, `get events`).
+
+---
+
+### 🛠️ Command Cheat‑Sheet
+
+```bash
+# Build & push new image
+docker build -t user/webapp-demo:v5 .
+docker push user/webapp-demo:v5
+
+# Rolling update to new image
+kubectl set image deployment/my-web-app webapp-demo=user/webapp-demo:v5
+
+# Watch rollout
+kubectl rollout status deployment/my-web-app
+kubectl get pods -w            # live view
+
+# Rollback to previous revision
+kubectl rollout undo deployment/my-web-app
+
+# Show rollout history
+kubectl rollout history deployment/my-web-app
+
+# Troubleshoot a stuck pod
+kubectl logs <pod>
+kubectl describe pod <pod>
+```
+
+---
+
+### 🖼️ Lifecycle Diagram (ASCII)
+
+```
+        ┌────────────┐                ┌────────────┐
+        │  Old Pod   │  serve traffic │  Old Pod   │
+        └─────┬──────┘                └─────┬──────┘
+              │ Rolling update starts       │
+              ▼                             ▼
+        ┌────────────┐                ┌────────────┐
+        │ New Pod    │---Ready?--No-->| Wait...     |
+        │ Pull Image │                │ (Old stays) │
+        └─────┬──────┘                └─────────────┘
+              │ Ready? Yes
+              ▼
+        ┌────────────┐
+        │ New Pod    │←─ now receives traffic
+        └────────────┘
+              │
+              ▼ delete
+        ┌────────────┐
+        │ Old Pod    │ (terminated)
+        └────────────┘
+```
+
+---
+
+With these commands and behaviours you can **update, verify, and roll back** any Kubernetes‑managed application confidently—keeping production users happy and downtime at (virtually) **zero**.
+
+---
+
+## 🧩 1. **Handling Pod Failure (Self-Healing in Kubernetes)**
+
+### 📌 Scenario:
+
+You deploy a Node.js website on Kubernetes (in a pod). If the website crashes due to a code bug or unexpected error, what happens?
+
+### ✅ Kubernetes Behavior:
+
+* When a pod crashes or exits, **Kubernetes automatically detects it** and **restarts** the pod.
+* This behavior is due to the **Deployment controller** and the default **restartPolicy: Always**.
+
+### 🔍 Observations:
+
+* If you visit the app URL after simulating a crash (`/exit` route), the pod status in the Dashboard shows red (error).
+* Within seconds, it goes green again — showing the app restarted.
+* `kubectl get pods` shows the **RESTART count increases** — evidence that the pod was restarted automatically.
+
+---
+
+## 🧱 2. **Why Single Pod is Risky**
+
+### ❌ Problem:
+
+* Even though Kubernetes restarts the app, there is **a few seconds of downtime** (while restarting).
+* In **production**, **zero downtime is expected** — even a second matters.
+
+---
+
+## 🚀 3. **Scaling Applications**
+
+### 📌 Goal:
+
+Run **multiple instances (replicas)** of your app to:
+
+* Ensure **no single point of failure**.
+* Handle **high traffic via load balancing**.
+
+### ✅ Solution: Horizontal Pod Scaling
+
+**Command**:
+
+```bash
+kubectl scale deployment/<deployment-name> --replicas=4
+```
+
+### 🔍 What Happens:
+
+* Kubernetes starts 4 pods for your app.
+* All are identical (same image, config).
+* LoadBalancer distributes traffic among them.
+
+### 📈 Benefits:
+
+* If one pod crashes, **others continue to serve traffic** → zero downtime.
+* Great for **load balancing** when traffic spikes.
+* Each pod handles a portion of traffic.
+
+---
+
+## ⚠️ 4. **Crash Simulation in Scaled Environment**
+
+### 🔍 Test:
+
+* If one pod crashes (via `/exit`), the others **still keep serving**.
+* `kubectl get pods` shows one restarting, others running fine.
+* You can still access the website without issues → zero disruption to users.
+
+---
+
+## 🧮 5. **Replica Status & Monitoring**
+
+### `kubectl get pods`:
+
+* Shows the **number of restarts** per pod.
+* You can infer which pods are unstable or have restarted due to crashes.
+
+---
+
+## 🔁 6. **Reducing Scale (Downscaling)**
+
+### 📌 Scenario:
+
+If traffic is low or to save resources, reduce the number of pods.
+
+### ✅ Command:
+
+```bash
+kubectl scale deployment/<deployment-name> --replicas=2
+```
+
+### 🔍 What Happens:
+
+* Kubernetes terminates the extra pods.
+* Only 2 pods keep running.
+* You save compute, while maintaining redundancy.
+
+---
+
+## 🧠 7. **Key Kubernetes Concepts Recap**
+
+| Concept            | Description                                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------------- |
+| **Self-Healing**   | Kubernetes automatically restarts crashed pods.                                                       |
+| **Deployment**     | Manages pod replicas and rollout logic.                                                               |
+| **ReplicaSet**     | Ensures the desired number of pod replicas are running.                                               |
+| **Scaling**        | `kubectl scale` lets you increase or decrease pod replicas.                                           |
+| **Zero Downtime**  | Achieved by having multiple pods running concurrently.                                                |
+| **Load Balancing** | Kubernetes services with `type=LoadBalancer` or `ClusterIP` + Ingress distribute traffic across pods. |
+| **Monitoring**     | Use Dashboard or CLI (`get pods`, `describe`, `logs`) to inspect pod health and restarts.             |
+
+---
+
+## 🧪 Practical Commands
+
+```bash
+# Create deployment with public Docker image
+kubectl create deployment node-app --image=flipkart/node-demo-app:v1
+
+# Expose app as LoadBalancer service on port 3000
+kubectl expose deployment node-app --type=LoadBalancer --port=3000
+
+# View pod and service status
+kubectl get pods
+kubectl get services
+
+# Simulate crash by hitting /exit route (if supported)
+
+# Check rollout status
+kubectl rollout status deployment/node-app
+
+# Scale up/down app
+kubectl scale deployment/node-app --replicas=4
+kubectl scale deployment/node-app --replicas=2
+
+# Check restarts to monitor crash loops
+kubectl get pods
+```
+
+---
+
+## ✅ Summary
+
+| Feature                         | What It Solves                        | Benefit                          |
+| ------------------------------- | ------------------------------------- | -------------------------------- |
+| **Self-Healing**                | App crashes unexpectedly              | Auto-restart keeps app alive     |
+| **Scaling**                     | Single pod is risky or traffic spikes | Adds redundancy & load balancing |
+| **Rolling Updates**             | Deploying new version safely          | No user disruption               |
+| **Monitoring & Restart Counts** | Debugging frequent crashes            | Better observability             |
+| **Undo Rollout**                | Wrong version deployed                | Instant rollback                 |
+| **Public Images via DockerHub** | Fast testing                          | Avoids local image builds        |
+
+---
+
+## start from (01:25:04)
