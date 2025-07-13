@@ -1242,5 +1242,176 @@ Copy official examples and adjust to your needs.
 [Deployment v1 apps](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#deployment-v1-apps)
 
 [Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#service-apis)
+---
 
-## start from (01:41:56)
+## 🧠 **Goal:**
+
+Deploy a Node.js app and MongoDB **together inside the same Pod** using Kubernetes.
+
+---
+
+## ✅ **Two Ways to Run Multiple Containers:**
+
+### 1. **Multiple Containers in the Same Pod**
+
+* **Shared environment** (network, volumes).
+* **Easy inter-container communication.**
+* Good for tightly coupled apps (like Node.js app + MongoDB).
+
+### 2. **Separate Containers in Different Pods**
+
+* Need **inter-pod communication** via Services.
+* Useful for **scaling independently** or **decoupling** services.
+
+---
+
+## 🛠️ **Approach Used in This Example:**
+
+Deploy both containers (Node.js app + MongoDB) **in the same Pod** using a single Deployment YAML.
+
+---
+
+## 🔹 **Images Used:**
+
+* `pulpfibs/node-mongo-db:0.2` → Node.js App
+* `mongo:latest` → MongoDB
+
+---
+
+## 📄 **Deployment YAML Breakdown:**
+
+### Basic Structure:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-node-db-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: node-db-app
+  template:
+    metadata:
+      labels:
+        app: node-db-app
+    spec:
+      containers:
+        - name: node-app
+          image: pulpfibs/node-mongo-db:0.2
+        - name: mongo-db
+          image: mongo
+```
+
+### 🔑 Key Points:
+
+* **Two containers** defined inside the `containers` array.
+* Containers **share resources**.
+* **No special networking setup** required inside the Pod.
+* `replicas: 2` → Two Pods will run.
+
+---
+
+## 🔧 **Service YAML (to expose Node.js app):**
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-node-db-service
+spec:
+  selector:
+    app: node-db-app
+  ports:
+    - port: 8080
+      targetPort: 3000
+  type: NodePort
+```
+
+### Notes:
+
+* Exposes the app on **port 8080**.
+* Internally routes to **Node.js container** on **port 3000**.
+
+---
+
+## 🚀 **Commands Used:**
+
+### Apply deployment:
+
+```bash
+kubectl apply -f deployment.yaml
+```
+
+### Apply service:
+
+```bash
+kubectl apply -f service.yaml
+```
+
+### Access via Minikube:
+
+```bash
+minikube service my-node-db-service
+```
+
+---
+
+## 🧪 **Testing Application Behavior:**
+
+### Issue with Multiple Replicas:
+
+* **Each Pod** has its **own MongoDB instance** (because it's not using a shared volume or external DB).
+* So, **data isn't shared** across Pods.
+* Example:
+
+  * First request → goes to Pod 1 → stores data in its MongoDB.
+  * Next request → goes to Pod 2 → its MongoDB doesn’t have the data.
+
+### Solution:
+
+* For real use-cases:
+
+  * **Separate MongoDB to another Pod or external DB** (not inside app Pod).
+  * Use **Persistent Volumes** to share storage across Pods.
+
+---
+
+## 🧹 **Simplification – Combined YAML:**
+
+You can **combine deployment and service** in one YAML using `---` separator:
+
+```yaml
+# Deployment definition here
+
+---
+
+# Service definition here
+```
+
+### Benefit:
+
+* Apply both using one command:
+
+```bash
+kubectl apply -f combined.yaml
+```
+
+---
+
+## ✅ Final Observations:
+
+| Concept                    | Description                                                                 |
+| -------------------------- | --------------------------------------------------------------------------- |
+| Same Pod                   | Good for tightly coupled containers (e.g., app + sidecar DB in development) |
+| Multiple Pods with same DB | Can cause **data inconsistency** without shared volume                      |
+| Services                   | Used to expose Pods and load-balance across replicas                        |
+| Minikube                   | Handy for local testing and accessing services                              |
+| Combined YAML              | Helps manage resources efficiently using one file                           |
+
+---
+
+- Command to run app from container :- `docker run --network my-net -p 3000:3000 --name myapp philippaul/node-mongo-db:01`
+
+## start from (01:49:59)
