@@ -1414,4 +1414,196 @@ kubectl apply -f combined.yaml
 
 - Command to run app from container :- `docker run --network my-net -p 3000:3000 --name myapp philippaul/node-mongo-db:01`
 
-## start from (01:49:59)
+---
+
+## ✅ **Goal:**
+
+* Deploy **Node.js Web App** and **MongoDB** in **separate Pods**.
+* Enable communication between them using **Kubernetes Services** and **environment variables**.
+
+---
+
+## 🔁 **Comparison with Previous Approach:**
+
+* Earlier: Node + MongoDB in the **same Pod**, communicating via `localhost`.
+* Now: Node and MongoDB in **separate Pods**, so need to use **service name + port** for communication.
+
+---
+
+## 🔄 **Steps Overview:**
+
+### 1. **Modify Node.js App to Use Environment Variables**
+
+In `index.js`, instead of hardcoding MongoDB connection:
+
+```js
+const mongoHost = process.env.MONGO_HOST || 'localhost';
+const mongoPort = process.env.MONGO_PORT || '27017';
+
+mongoose.connect(`mongodb://${mongoHost}:${mongoPort}/your-db-name`);
+```
+
+### ✅ Benefit:
+
+* Makes MongoDB connection **dynamic**.
+* Can pass environment variables **at deployment time**.
+
+---
+
+### 2. **Build and Push New Docker Image**
+
+* Update app to use `MONGO_HOST`, `MONGO_PORT`.
+* Build the image with a new version tag:
+
+  ```bash
+  docker build -t your-dockerhub-username/node-mongo-db:0.3 .
+  docker push your-dockerhub-username/node-mongo-db:0.3
+  ```
+
+---
+
+### 3. **Create Separate Deployment & Service for MongoDB**
+
+#### Example `mongo.yaml` (Deployment + Service):
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo-app
+  template:
+    metadata:
+      labels:
+        app: mongo-app
+    spec:
+      containers:
+        - name: mongo
+          image: mongo
+          ports:
+            - containerPort: 27017
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-service
+spec:
+  selector:
+    app: mongo-app
+  ports:
+    - port: 27017
+      targetPort: 27017
+  type: ClusterIP
+```
+
+### ✅ Notes:
+
+* `mongo-service` will be used as **hostname** by Node app.
+* Port remains **27017**.
+* `type: ClusterIP` is enough for internal Pod-to-Pod communication.
+
+---
+
+### 4. **Create Deployment & Service for Node App**
+
+#### Example `node.yaml`:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-app
+  template:
+    metadata:
+      labels:
+        app: node-app
+    spec:
+      containers:
+        - name: node-web
+          image: your-dockerhub-username/node-mongo-db:0.3
+          ports:
+            - containerPort: 3000
+          env:
+            - name: MONGO_HOST
+              value: "mongo-service"
+            - name: MONGO_PORT
+              value: "27017"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-service
+spec:
+  selector:
+    app: node-app
+  ports:
+    - port: 8080
+      targetPort: 3000
+  type: NodePort
+```
+
+---
+
+## 🧠 **Key Concepts Recap:**
+
+| Concept                | Description                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `localhost`            | Works only inside the same Pod. Fails in cross-Pod communication.            |
+| `process.env.VARIABLE` | Used to inject runtime config into containers via environment variables.     |
+| `ClusterIP` Service    | Default type for internal communication between Pods.                        |
+| `NodePort` Service     | Exposes app to the outside world (via Minikube/Node IP).                     |
+| `env` in YAML          | Used to pass environment variables to the container.                         |
+| Image Tags             | Always increment version (`0.1`, `0.2`, `0.3`) when pushing to Docker Hub.   |
+| Service Discovery      | Kubernetes lets Pods discover each other via **service names as DNS names**. |
+
+---
+
+## 🧪 **Testing and Validation:**
+
+1. Apply Mongo deployment + service:
+
+   ```bash
+   kubectl apply -f mongo.yaml
+   ```
+
+2. Apply Node app deployment + service:
+
+   ```bash
+   kubectl apply -f node.yaml
+   ```
+
+3. Verify everything is running:
+
+   ```bash
+   kubectl get pods
+   kubectl get services
+   ```
+
+4. Access app using:
+
+   ```bash
+   minikube service node-service
+   ```
+
+---
+
+## ✅ Conclusion:
+
+You now understand how to:
+
+* Separate concerns using different Pods.
+* Enable inter-Pod communication using Kubernetes Services.
+* Use **environment variables** for **configurable connections**.
+* Combine deployments and services in a single file using `---`.
+
+
+## start from (02:10:22)
