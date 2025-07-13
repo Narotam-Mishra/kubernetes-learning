@@ -1068,4 +1068,179 @@ kubectl get pods
 
 ---
 
-## start from (01:25:04)
+## ✅ **Kubernetes Deployment Using Configuration Files (`YAML`)**
+
+Instead of manually executing many `kubectl` commands, you can **define your entire Kubernetes application in declarative YAML configuration files**, which improves maintainability and scalability.
+
+---
+
+## 📁 **1. What is a Deployment Config File?**
+
+A **Deployment YAML** is used to define:
+
+* Number of replicas (pods).
+* Pod template.
+* Container specs (image, name, ports).
+* Metadata (name, labels).
+
+### 🧩 **Key Fields in `deployment.yaml`:**
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-node-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: node-app
+  template:
+    metadata:
+      labels:
+        app: node-app
+    spec:
+      containers:
+        - name: node-container
+          image: your-dockerhub/image-name:tag
+```
+
+### 💡 Notes:
+
+* You can **change the number of replicas** anytime by just updating the YAML and re-applying.
+* Use `kubectl apply -f deployment.yaml` to create/update the deployment.
+
+---
+
+## ⚙️ **2. Benefits of Configuration Files**
+
+* **Centralized changes**: All configs (replicas, versions, labels) are managed in one place.
+* **Easy scaling**: Update replicas in YAML and re-apply.
+* **Versioning**: Update image version in YAML to rollout new changes.
+* **Error handling**: You can monitor failed pod creation, e.g., image not found, via dashboard/events.
+
+---
+
+## 🌐 **3. Creating a Kubernetes Service**
+
+To expose your pods to external traffic, you need to create a **Service**.
+
+### 🧩 **Service YAML Example:**
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-node-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: node-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+```
+
+### 💡 Notes:
+
+* `selector`: Must match pod labels (e.g., `app: node-app`).
+* `type: LoadBalancer`: Exposes your service on an external IP.
+* `port` is what users access, `targetPort` is the container’s internal port (e.g., 3000).
+
+### 📌 Command to apply:
+
+```bash
+kubectl apply -f service.yaml
+```
+
+---
+
+## 📊 **4. Monitoring and Debugging**
+
+* Use:
+
+  * `kubectl get pods`
+  * `kubectl get deployments`
+  * `kubectl get services`
+  * `kubectl describe pod <pod-name>` for detailed info/events.
+* If the image tag is wrong or doesn't exist, the pod will fail to start — fix the YAML and re-apply.
+
+---
+
+## 🔁 **5. Updating and Rolling Back**
+
+* Update replicas/image version → `kubectl apply -f deployment.yaml`
+* Kubernetes will **gracefully rollout the changes**.
+* You can monitor rollout using:
+
+```bash
+kubectl rollout status deployment/my-node-app
+```
+
+---
+
+## 🧪 **6. Testing Failure Handling (Self-Healing)**
+
+* If your container crashes (`exit` or error), Kubernetes **auto-restarts the pod**.
+* This is part of Kubernetes' **self-healing** behavior.
+* You can verify restart behavior with:
+
+```bash
+kubectl get pods
+```
+
+---
+
+## 🗑️ **7. Deleting Deployments and Services**
+
+Use the same config file to delete resources:
+
+```bash
+kubectl delete -f deployment.yaml
+kubectl delete -f service.yaml
+```
+
+---
+
+## 📘 **8. Where to Find YAML Examples?**
+
+Use the official Kubernetes documentation:
+
+* [https://kubernetes.io/docs/](https://kubernetes.io/docs/)
+* Especially helpful: [API Reference](https://kubernetes.io/docs/reference/generated/kubernetes-api/)
+
+Under “Reference” you can find:
+
+* Deployments → `apps/v1`
+* Services → `v1`
+
+Copy official examples and adjust to your needs.
+
+---
+
+## ✅ Summary of Key Kubernetes Concepts:
+
+| Concept            | Summary                                           |
+| ------------------ | ------------------------------------------------- |
+| Deployment         | Manages replicas of pods (versioned and scalable) |
+| Service            | Exposes pods, allows communication                |
+| `kubectl apply -f` | Applies changes from YAML                         |
+| `replicas`         | Number of pod instances                           |
+| Self-healing       | Auto restarts crashed pods                        |
+| `selector`         | Binds service to specific pods                    |
+| Dashboard          | Visual tool to check pod/service status           |
+| Image pull errors  | Occur if wrong image name or version              |
+| Config-driven      | Easier to manage than CLI-only deployments        |
+
+---
+
+### Imp References
+
+[Kubernetes One-page API Reference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/)
+
+[Deployment v1 apps](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#deployment-v1-apps)
+
+[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#service-apis)
+
+## start from (01:41:56)
