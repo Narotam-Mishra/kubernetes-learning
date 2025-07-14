@@ -1605,5 +1605,454 @@ You now understand how to:
 * Use **environment variables** for **configurable connections**.
 * Combine deployments and services in a single file using `---`.
 
+---
 
-## start from (02:10:22)
+## ✅ **Goal Recap:**
+
+Run a **multi-container application** (Node.js + MongoDB) in **separate Pods** using:
+
+* **Kubernetes Deployments & Services**
+* **Environment Variables via ConfigMaps**
+* **Docker image builds & versioning**
+* **Troubleshooting crash issues**
+* **Minikube Dashboard** for validation
+
+---
+
+## 🔄 **Key Concepts and Steps**
+
+### 1. 🔧 **Using `ConfigMap` for Environment Variables**
+
+* Instead of hardcoding DB host and port in code, use **ConfigMap** to inject environment variables.
+
+#### ✅ Example: `mongo-config.yaml`
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongo-config
+data:
+  MONGO_HOST: "service-mongo-db"
+  MONGO_PORT: "27017"
+```
+
+* This defines key-value pairs usable as **environment variables** in your deployments.
+
+---
+
+### 2. 🌐 **Injecting ConfigMap into Deployment**
+
+In your **Node.js Deployment**, inject values from `mongo-config`:
+
+```yaml
+env:
+  - name: MONGO_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: mongo-config
+        key: MONGO_HOST
+  - name: MONGO_PORT
+    valueFrom:
+      configMapKeyRef:
+        name: mongo-config
+        key: MONGO_PORT
+```
+
+✅ This makes the Node app connect to MongoDB using values like:
+
+```js
+process.env.MONGO_HOST
+process.env.MONGO_PORT
+```
+
+---
+
+### 3. 📦 **Build & Push New Docker Image**
+
+After fixing issues in the code:
+
+```bash
+docker build -t your-repo/node-app:0.4 .
+docker push your-repo/node-app:0.4
+```
+
+* Update deployment to use the new image version (`0.4`).
+
+---
+
+### 4. 🐞 **Troubleshooting Common Issues**
+
+#### 🔴 CrashLoopBackOff Problem:
+
+* Usually due to bad ENV values or image config.
+* Use the **Kubernetes Dashboard** or command line:
+
+```bash
+kubectl describe pod <pod-name>
+```
+
+* Check **Events** at the bottom for error messages.
+
+#### Fix Example:
+
+* Problem: Using incorrect quotes for environment variables in code.
+* Solution: Use proper syntax like `process.env.VARIABLE`, not `'${VARIABLE}'`.
+
+---
+
+### 5. 📈 **Scaling the App (Replica Sets)**
+
+You can scale the Node.js app to multiple instances:
+
+```yaml
+spec:
+  replicas: 2
+```
+
+* Now 2 Pods will run, sharing the load.
+* You’ll see 3 Pods total: 2 Node.js, 1 MongoDB.
+
+---
+
+### 6. 🌐 **Testing with Minikube**
+
+Start your Node.js service:
+
+```bash
+minikube service node-app-service
+```
+
+Then, in the browser:
+
+* Use the Web UI to add some data (like an email).
+* Even if one Node Pod crashes, the app remains available thanks to **replica sets**.
+
+---
+
+### 7. 🧠 **Concepts Covered in This Walkthrough**
+
+| Concept                          | Description                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------------- |
+| **ConfigMap**                    | Stores non-sensitive key-value configuration (e.g. DB host, port)                 |
+| **Environment Variables**        | Dynamically passed to containers during deployment                                |
+| **Service Name as DNS**          | Services can be reached using their name inside the cluster                       |
+| **CrashLoopBackOff**             | Pod keeps restarting due to runtime/config error                                  |
+| **ReplicaSet Scaling**           | Ensures high availability by running multiple replicas                            |
+| **Minikube Dashboard**           | Visual tool to inspect running resources and logs                                 |
+| **Dynamic Docker Image Tagging** | Use versioned tags (`v0.3`, `v0.4`) for clarity and rollback                      |
+| **kubectl apply -f**             | Used to apply any Kubernetes resource file (Deployment, Service, ConfigMap, etc.) |
+
+---
+
+### ✅ Final Outcome:
+
+* **Node.js app** and **MongoDB** run in **separate pods**.
+* Communication enabled using:
+
+  * Kubernetes **Services** (`ClusterIP`)
+  * **Environment variables** passed via **ConfigMap**
+* Errors resolved using **Dashboard troubleshooting**
+* App scaled and verified using **Minikube service + browser**
+
+---
+
+## ✅ **Context Recap**
+
+You deployed a project with:
+
+* A **Node.js web app**
+* A **MongoDB database**
+* Each running in **separate pods**
+* Using **Minikube and Kubernetes**
+
+### 🧪 Problem Observed:
+
+When you updated the **MongoDB image version**, the **previous data was lost**, even though the app was still running fine.
+
+---
+
+## 🔍 **Why Was the Data Lost?**
+
+* MongoDB was storing data **inside the container** (ephemeral storage).
+* When the **pod was recreated** (due to version update or crash), a **new container** was launched with a clean slate.
+* Kubernetes restarts the pod, but **container storage is destroyed** unless explicitly persisted.
+
+---
+
+## 💡 Solution: Use Volumes to Persist Data
+
+### 1. ⚙️ **Volumes Inside Pod**
+
+* You can mount a **volume inside the pod**, and tell MongoDB to use it.
+* This helps **retain data even if the container restarts**.
+
+🟡 But: If the whole **pod is recreated**, even this volume is lost — because it’s **pod-scoped**.
+
+---
+
+### 2. 🛠️ **Persistent Volumes (PV)**
+
+* Persistent Volume = A **cluster-level storage resource**.
+* Lives **outside any specific pod or container**.
+* Independent of pod lifecycle: **persists data across pod deletions, crashes, upgrades**.
+
+### 🔹 Diagram Concept:
+
+```
++-----------------+         +-----------------+
+|   MongoDB Pod   |         | PersistentVolume|
+|  Uses PVC claim |<------->|  (Cluster Level)|
++-----------------+         +-----------------+
+```
+
+---
+
+## 🧱 Components to Use for Persistent Storage
+
+### 🔸 1. **PersistentVolume (PV)**
+
+* A storage unit **defined at the cluster level**.
+* Can use:
+
+  * HostPath (local disk)
+  * Cloud storage (EBS, GCE, AzureDisk)
+  * NFS, GlusterFS, etc.
+
+### 🔸 2. **PersistentVolumeClaim (PVC)**
+
+* Pods **request storage** using a PVC.
+* PVC claims a matching PV based on requirements (like storage size, access mode).
+
+---
+
+## 🛑 Benefits of Persistent Volumes
+
+| Benefit                   | Description                                                       |
+| ------------------------- | ----------------------------------------------------------------- |
+| **Pod Resilience**        | Data persists even if pods/containers are restarted or replaced   |
+| **Version Upgrades Safe** | You can safely upgrade MongoDB image/version                      |
+| **Scalable**              | Multiple containers can share same volume if needed               |
+| **Cloud-Ready**           | Supports integration with AWS/GCP/Azure for durable cloud storage |
+| **Flexibility**           | Choose local or remote volumes as per your architecture needs     |
+
+---
+
+## 🧪 Types of Volumes in Kubernetes
+
+| Type                       | Description                                                          |
+| -------------------------- | -------------------------------------------------------------------- |
+| **Ephemeral Volume**       | Lives **only for the lifetime of a pod** (e.g. `emptyDir`)           |
+| **Persistent Volume (PV)** | Exists **independent of pod**, manually defined                      |
+| **PVC (Claim)**            | Bridge between pod and PV, used to "claim" the storage               |
+| **Cloud Volumes**          | Provided by cloud services like AWS EBS, AzureDisk                   |
+| **HostPath**               | Maps a local path from the host machine (used in Minikube/local dev) |
+
+---
+
+## 🆚 Ephemeral vs Persistent Volume
+
+| Feature            | Ephemeral Volume    | Persistent Volume     |
+| ------------------ | ------------------- | --------------------- |
+| Lifetime           | Tied to Pod         | Independent           |
+| Use Case           | Caching, temp files | Databases, user files |
+| Survives Pod Crash | ❌ No                | ✅ Yes                 |
+| Used via PVC       | ❌ No                | ✅ Yes                 |
+
+---
+
+## 🛠️ Next Steps (Practical Guide Summary)
+
+To fix your MongoDB data loss issue:
+
+1. ✅ **Create a PersistentVolume** (e.g. 1Gi storage).
+2. ✅ **Create a PersistentVolumeClaim** requesting storage.
+3. ✅ **Mount the PVC in your MongoDB pod’s `volumeMounts`**.
+4. ✅ **Update MongoDB to store `/data/db` in this mounted path**.
+5. ✅ Now even if the Mongo pod is deleted, your data stays.
+
+---
+
+## 🧾 Additional Resources
+
+* Official Kubernetes Docs:
+  [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
+* Types of volumes: \[`emptyDir`, `hostPath`, `nfs`, `awsElasticBlockStore`, etc.]
+
+---
+
+### Imp Reference:
+[Kubernete's Volumes](https://kubernetes.io/docs/concepts/storage/volumes/)
+
+---
+
+## 🧩 **Kubernetes Persistent Volume Setup Summary**
+
+### 🔹 1. **What is a Persistent Volume (PV)?**
+
+* A **Persistent Volume (PV)** is a piece of storage in a Kubernetes cluster that has been provisioned by an administrator or dynamically provisioned using Storage Classes.
+* It allows **data to persist** beyond the lifecycle of a Pod.
+
+---
+
+## ⚙️ **Step-by-Step Implementation**
+
+### ✅ Step 1: **Create a Persistent Volume (PV)**
+
+**File:** `host-pv.yaml`
+
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: host-pv
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data
+    type: DirectoryOrCreate
+```
+
+**Key Points:**
+
+* `storage: 1Gi` — Amount of disk space.
+* `volumeMode: Filesystem` — Data stored as files.
+* `accessModes: ReadWriteOnce` — Only one node can mount the volume at a time.
+* `hostPath` — Stores data directly on the host at `/data`. For **local testing only**.
+
+---
+
+### ✅ Step 2: **Create a Persistent Volume Claim (PVC)**
+
+**File:** `host-pvc.yaml`
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: host-pvc
+spec:
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+```
+
+**Key Point:**
+
+* The PVC **claims 1Gi storage** from the PV.
+* `storageClassName` must match the PV.
+
+---
+
+### ✅ Step 3: **Use PVC in Deployment (MongoDB Example)**
+
+In your MongoDB Deployment YAML, you need to **mount the volume**.
+
+```yaml
+...
+spec:
+  containers:
+    - name: mongo
+      image: mongo
+      volumeMounts:
+        - name: mongo-vol
+          mountPath: /data/db
+  volumes:
+    - name: mongo-vol
+      persistentVolumeClaim:
+        claimName: host-pvc
+```
+
+**Explanation:**
+
+* `/data/db` is the default path MongoDB uses to store data.
+* We’re mounting the claimed volume (`host-pvc`) to this path.
+
+---
+
+## 📋 Commands Used
+
+### ✅ Apply configurations:
+
+```bash
+kubectl apply -f host-pv.yaml
+kubectl apply -f host-pvc.yaml
+kubectl apply -f mongo-deployment.yaml
+```
+
+### ✅ Verify PV and PVC:
+
+```bash
+kubectl get pv
+kubectl get pvc
+```
+
+---
+
+## 🧪 Testing the Setup
+
+### 1. Add data to the MongoDB app via frontend (e.g., email entries).
+
+### 2. Delete MongoDB deployment:
+
+```bash
+kubectl delete deployment mongo
+```
+
+### 3. Re-deploy MongoDB:
+
+```bash
+kubectl apply -f mongo-deployment.yaml
+```
+
+### 4. ✅ Data is still available – proves **persistent storage works!**
+
+---
+
+## 🧠 Other Notes and Learnings
+
+| Concept                      | Explanation                                                              |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `hostPath`                   | Good for **local testing** only. Not recommended in multi-node clusters. |
+| `ReadWriteOnce`              | Suitable for single-node clusters.                                       |
+| `storageClassName: standard` | Default dynamic provisioner in Minikube.                                 |
+| Volume Mount Path            | Depends on the container image (e.g., `/data/db` for MongoDB).           |
+| Dashboard Access             | You can verify volumes, claims, pods from **Minikube dashboard**.        |
+| Restart Testing              | Stopping and restarting Minikube should not delete data.                 |
+
+---
+
+## ⚠️ Limitations of `hostPath`
+
+* **Only for local, single-node clusters.**
+* Will **not work** in production or multi-node setups.
+* Kubernetes **recommends alternatives** like:
+
+  * `local` volume (safer alternative).
+  * Cloud-based volumes:
+
+    * AWS EBS
+    * Azure Disks/Files
+    * GCE Persistent Disks
+    * NFS
+
+You can find them in Kubernetes documentation under [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/).
+
+---
+
+## ✅ Final Takeaway
+
+> **Persistent Volumes are crucial for storing stateful data** like database content that must not be lost when pods restart or crash.
+
+Using PVC + PV correctly ensures your **data survives across pod restarts, cluster restarts, and redeployments** — essential for real-world applications.
+
+---
+
